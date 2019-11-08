@@ -8,6 +8,7 @@ warnings.filterwarnings("ignore")
 import seaborn as sns
 from .tools import *
 import traceback
+import gc
 
 
 def Dt_Gini_Bin_mono(df, col, target='bad', max_bin=5, min_percent=0.15, special=9999):
@@ -20,7 +21,6 @@ def Dt_Gini_Bin_mono(df, col, target='bad', max_bin=5, min_percent=0.15, special
     :param min_percent:最小分组占比
     :return: 分组结果
     '''
-    cut_off_dict = {}
     Less_Bin_Var = []
     IndexError_Var = []
 
@@ -37,7 +37,6 @@ def Dt_Gini_Bin_mono(df, col, target='bad', max_bin=5, min_percent=0.15, special
             else:
                 DF = df[df[c].notnull()]
                 DF = DF[DF[c] != special]
-                X, y = pd.concat([DF[c], DF[c]], axis=1), DF[target]
                 X, y = DF[c].values.reshape(-1,1), DF[target].values
                 clf = DecisionTreeClassifier(max_leaf_nodes=max_bins,
                                              min_samples_leaf=min_percent).fit(X, y)
@@ -135,7 +134,6 @@ def Dt_Gini_Bin(df, col, target='bad', max_bin=5, min_percent=0.15, special=9999
     :param min_percent:最小分组占比
     :return: 分组结果
     '''
-    cut_off_dict = {}
     Less_Bin_Var = []
     IndexError_Var = []
 
@@ -180,6 +178,92 @@ def Dt_Gini_Bin(df, col, target='bad', max_bin=5, min_percent=0.15, special=9999
                     sorted_b = merge_pureness_by_chi2(group, problem_index, sorted_b)  # 根据卡方值合并
                 df[c + '_Bin'] = df[c].map(lambda x: assignBin(x, sorted_b, special_attribute=[special]))
                 dict_bin.update({c: sorted_b})
+        except IndexError:
+            # print("{} is IndexError".format(c))
+            traceback.print_exc()
+            IndexError_Var.append(c)
+        except ZeroDivisionError:
+            # print("{} is ZeroDivisionError".format(c))
+            traceback.print_exc()
+            IndexError_Var.append(c)
+        except TypeError:
+            # print("{} is TypeError".format(c))
+            traceback.print_exc()
+            IndexError_Var.append(c)
+        dict_bin['Less_Bin_Var'] = Less_Bin_Var
+        dict_bin['IndexError_Var'] = IndexError_Var
+    return dict_bin
+
+
+# 基于决策树的最优分组方法
+def Dt_Gini_Bin_mono_iv(df, col, target='bad', max_bin=5, min_percent=0.15, special=9999):
+    '''
+    :需要将特殊值处理为空值，分组之后，再将特殊值单独拿来处理
+    :param df: 需要分组的数据集
+    :param col: 数值型变量名的集合
+    :param target: 好坏标签
+    :param max_bins: 最大分组数量
+    :param min_percent:最小分组占比
+    :return: 分组结果以及iv值
+    '''
+    Less_Bin_Var = []
+    IndexError_Var = []
+
+    dict_bin = {}
+    for c in col:
+        max_bins = max_bin
+        gc.collect()
+        try:
+            print("{} is in processing".format(c))
+            colLevels = sorted(list(set(df[c])))
+            N_distinct = len(colLevels)
+            if N_distinct <= max_bins:  # 如果原始属性的取值个数低于max_interval，不执行这段函数
+                print("The number of original levels for {} is less than or equal to max intervals".format(c))
+                Less_Bin_Var.append(c)
+                # 对于小于组数的变量按类别变量处理，同时计算woe和iv值
+                df.loc[df[c].isnull(), c] = 'nan'
+                df[c+'_Bin'] = df[c]
+                woe, iv = calcWoeIV(df, c + '_Bin', target)
+                dict_bin[c] = [woe,iv]
+
+            else:
+                DF = df[df[c].notnull()]
+                DF = DF[DF[c] != special]
+                X, y = DF[c].values.reshape(-1,1), DF[target].values
+                clf = DecisionTreeClassifier(max_leaf_nodes=max_bins,
+                                             min_samples_leaf=min_percent).fit(X, y)
+                n_nodes = clf.tree_.node_count
+                children_left = clf.tree_.children_left
+                children_right = clf.tree_.children_right
+                threshold = clf.tree_.threshold
+                boundary = []
+                for i in range(n_nodes):
+                    if children_left[i] != children_right[i]:
+                        boundary.append(threshold[i])
+                sorted_b = sorted(boundary)
+                df[c + '_Bin'] = df[c].map(lambda x: assignBin(x, sorted_b, special_attribute=[]))
+                monotone = badRateMonotone(df, c + '_Bin', target)
+                while (not monotone):
+                    # 检验分箱后的单调性是否满足。如果不满足，则缩减分箱的个数。
+                    max_bins -= 1
+                    clf = DecisionTreeClassifier(max_leaf_nodes=max_bins,
+                                                 min_samples_leaf=min_percent).fit(X, y)
+                    n_nodes = clf.tree_.node_count
+                    children_left = clf.tree_.children_left
+                    children_right = clf.tree_.children_right
+                    threshold = clf.tree_.threshold
+                    boundary = []
+                    for i in range(n_nodes):
+                        if children_left[i] != children_right[i]:
+                            boundary.append(threshold[i])
+                    sorted_b = sorted(boundary)
+                    df[c + '_Bin'] = df[c].map(lambda x: assignBin(x, sorted_b, special_attribute=[special]))
+                    if max_bins == 2:
+                        # 当分箱数为2时，必然单调
+                        break
+                    monotone = badRateMonotone(df, c + '_Bin', target, special_attribute=['Bin_-1'])
+                woe,iv = calcWoeIV(df,c+'_Bin',target)
+                dict_bin.update({c: [sorted_b,woe,iv]})
         except IndexError:
             # print("{} is IndexError".format(c))
             traceback.print_exc()

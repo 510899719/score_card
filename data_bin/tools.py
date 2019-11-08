@@ -40,18 +40,18 @@ def badRateMonotone(df, sortByVar, target,special_attribute = []):
     df2 = df.loc[~df[sortByVar].isin(special_attribute)]
     if len(set(df2[sortByVar])) <= 2:
         return True
-    regroup = BinBadRate(df2, sortByVar, target)[1]
+    regroup = binBadRate(df2, sortByVar, target)[1]
     combined = zip(regroup['total'],regroup['bad'])
     badRate = [x[1]*1.0/x[0] for x in combined]
-    badRateNotMonotone = [badRate[i]<badRate[i+1] and badRate[i] < badRate[i-1] or badRate[i]>badRate[i+1] and badRate[i] > badRate[i-1]
+    badRateNotMonotone_list = [badRate[i]<badRate[i+1] and badRate[i] < badRate[i-1] or badRate[i]>badRate[i+1] and badRate[i] > badRate[i-1]
                        for i in range(1,len(badRate)-1)]
-    if True in badRateNotMonotone:
+    if True in badRateNotMonotone_list:
         return False
     else:
         return True
 
 
-def BinBadRate(df, col, target, grantRateIndicator=0):
+def binBadRate(df, col, target, grantRateIndicator=0):
     '''
     :param df: 需要计算好坏比率的数据集
     :param col: 需要计算好坏比率的特征
@@ -94,7 +94,7 @@ def calcChi2(df):
     return chi2
 
 
-def calcWoe(df,col,label):
+def calcWoeIV(df,col,label):
     '''
     :param df: 原始数据
     :param col: 分bin之后的标签

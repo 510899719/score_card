@@ -35,7 +35,7 @@ def ChiMerge(df, col, target, max_interval=5,special_attribute=[],minBinPcnt=0):
         else:
             df2['temp'] = df2[col]
         # 总体bad rate将被用来计算expected bad count
-        (binBadRate, regroup, overallRate) = BinBadRate(df2, 'temp', target, grantRateIndicator=1)
+        (binBadRate, regroup, overallRate) = binBadRate(df2, 'temp', target, grantRateIndicator=1)
 
         # 首先，每个单独的属性值将被分为单独的一组
         # 对属性值进行排序，然后两两组别进行合并
@@ -67,7 +67,7 @@ def ChiMerge(df, col, target, max_interval=5,special_attribute=[],minBinPcnt=0):
         # 检查是否有箱没有好或者坏样本。如果有，需要跟相邻的箱进行合并，直到每箱同时包含好坏样本
         groupedvalues = df2['temp'].apply(lambda x: assignBin(x, cutOffPoints)) #每个原始箱对应卡方分箱后的箱号
         df2['temp_Bin'] = groupedvalues
-        (binBadRate,regroup) = BinBadRate(df2, 'temp_Bin', target)
+        (binBadRate,regroup) = binBadRate(df2, 'temp_Bin', target)
         #返回（每箱坏样本率字典，和包含“列名、坏样本数、总样本数、坏样本率的数据框”）
         [minBadRate, maxBadRate] = [min(binBadRate.values()),max(binBadRate.values())]
         while minBadRate ==0 or maxBadRate == 1:
@@ -86,13 +86,13 @@ def ChiMerge(df, col, target, max_interval=5,special_attribute=[],minBinPcnt=0):
                 currentIndex = list(regroup.temp_Bin).index(bin)
                 prevIndex = list(regroup.temp_Bin)[currentIndex - 1]
                 df3 = df2.loc[df2['temp_Bin'].isin([prevIndex, bin])]
-                (binBadRate, df2b) = BinBadRate(df3, 'temp_Bin', target)
+                (binBadRate, df2b) = binBadRate(df3, 'temp_Bin', target)
                 #chisq1 = Chi2(df2b, 'total', 'bad', overallRate)
                 chisq1 = calcChi2(df2b, 'total', 'bad')
                 # 和后一箱进行合并，并且计算卡方值
                 laterIndex = list(regroup.temp_Bin)[currentIndex + 1]
                 df3b = df2.loc[df2['temp_Bin'].isin([laterIndex, bin])]
-                (binBadRate, df2b) = BinBadRate(df3b, 'temp_Bin', target)
+                (binBadRate, df2b) = binBadRate(df3b, 'temp_Bin', target)
                 #chisq2 = Chi2(df2b, 'total', 'bad', overallRate)
                 chisq2 = calcChi2(df2b, 'total', 'bad')
                 if chisq1 < chisq2:
@@ -102,7 +102,7 @@ def ChiMerge(df, col, target, max_interval=5,special_attribute=[],minBinPcnt=0):
             # 完成合并之后，需要再次计算新的分箱准则下，每箱是否同时包含好坏样本
             groupedvalues = df2['temp'].apply(lambda x: assignBin(x, cutOffPoints))
             df2['temp_Bin'] = groupedvalues
-            (binBadRate, regroup) = BinBadRate(df2, 'temp_Bin', target)
+            (binBadRate, regroup) = binBadRate(df2, 'temp_Bin', target)
             [minBadRate, maxBadRate] = [min(binBadRate.values()), max(binBadRate.values())]
         # 需要检查分箱后的最小占比
         if minBinPcnt > 0:
@@ -127,13 +127,13 @@ def ChiMerge(df, col, target, max_interval=5,special_attribute=[],minBinPcnt=0):
                     currentIndex = list(valueCounts.index).index(indexForMinPcnt)
                     prevIndex = list(valueCounts.index)[currentIndex - 1]
                     df3 = df2.loc[df2['temp_Bin'].isin([prevIndex, indexForMinPcnt])]
-                    (binBadRate, df2b) = BinBadRate(df3, 'temp_Bin', target)
+                    (binBadRate, df2b) = binBadRate(df3, 'temp_Bin', target)
                     #chisq1 = Chi2(df2b, 'total', 'bad', overallRate)
                     chisq1 = calcChi2(df2b, 'total', 'bad')
                     # 和后一箱进行合并，并且计算卡方值
                     laterIndex = list(valueCounts.index)[currentIndex + 1]
                     df3b = df2.loc[df2['temp_Bin'].isin([laterIndex, indexForMinPcnt])]
-                    (binBadRate, df2b) = BinBadRate(df3b, 'temp_Bin', target)
+                    (binBadRate, df2b) = binBadRate(df3b, 'temp_Bin', target)
                     #chisq2 = Chi2(df2b, 'total', 'bad', overallRate)
                     chisq2 = calcChi2(df2b, 'total', 'bad')
                     if chisq1 < chisq2:
